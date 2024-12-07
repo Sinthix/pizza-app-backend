@@ -1,155 +1,132 @@
 <?php
-include_once __DIR__ . '/../models/Pizza.php';
+require_once __DIR__ . '/../models/Pizza.php';
+require_once __DIR__ . '/../config/database.php';
 
 class PizzaController {
     private $db;
-    private $requestMethod;
+    private $pizzaModel;
 
-    public function __construct($db, $requestMethod) {
-        $this->db = $db;
-        $this->requestMethod = $requestMethod;
+    public function __construct() {
+        $database = new Database();
+        $this->db = $database->getConnection();
+        $this->pizzaModel = new Pizza($this->db);
     }
 
     public function processRequest() {
-        switch ($this->requestMethod) {
-            case 'GET':
-                if(isset($_GET['id'])) {
-                    $response = $this-getPizza($_GET['id']);
-                } else {
-                    $response = $this->getAllPizzas();
-                }
-                break;
-            case 'POST':
-                $response = $this->createPizza();
-                break;
-            case 'PUT':
-                $response = $this->updatePizza();
-            case 'DELETE':
-                $response = $this->deletePizza();
-            default:
-                $response = $this->notFoundResponse();
-                break;
-        }
-        
-        header($response['status_code_header']);
-        if($response['body']) {
-            echo $response['body'];
+        $method = $_SERVER['REQUEST_METHOD'];
+        $action = $_GET['action'] ?? '';
+
+        try {
+            switch ($method) {
+                case 'GET':
+                    if ($action === 'all') {
+                        $this->getAllPizzas();
+                    } elseif ($action === 'single' && isset($_GET['id'])) {
+                        $this->getPizzaById((int)$_GET['id']);
+                    } else {
+                        http_response_code(400);
+                        echo json_encode(["message" => "Invalid GET request"]);
+                    }
+                    break;
+                case 'POST':
+                    $this->createPizza();
+                    break;
+                case 'PUT':
+                    $this->updatePizza();
+                    break;
+                case 'DELETE':
+                    $this->deletePizza();
+                    break;
+                default:
+                    http_response_code(405);
+                    echo json_encode(["message" => "Method not allowed"]);
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["message" => "Server error", "error" => $e->getMessage()]);
         }
     }
 
     private function getAllPizzas() {
-        $pizza = new Pizza($this->db);
-        $result = $pizza->findAll();
-        $response['status_code_header'] = 'HTTP/1.1 200 OK';
-        $response['body'] = json_encode($result);
-        return $response;
+        $pizzas = $this->pizzaModel->findAll();
+        echo json_encode($pizzas);
     }
 
-    private function getPizza($id) {
-        $pizza = new Pizza($this->db);
-        $result = $pizza->find($id);
-
-        if (!$result) {
-            return $this->notFoundResponse();
+    private function getPizzaById($id) {
+        $pizza = $this->pizzaModel->find($id);
+        if ($pizza) {
+            echo json_encode($pizza);
+        } else {
+            http_response_code(404);
+            echo json_encode(["message" => "Pizza not found"]);
         }
-
-        $response['status_code_header'] = 'HTTP/1.1 200 OK';
-        $response['body'] = json_encode($result);
-        return $response;
     }
 
     private function createPizza() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents("php://input"), true);
+
         if (!$this->validatePizzaInput($input)) {
-            return $this->unprocessableEntityResponse();
+            http_response_code(400);
+            echo json_encode(["message" => "Invalid input"]);
+            return;
         }
 
-        $sanitizedInput = $this->sanitizeInput($input);
+        $this->pizzaModel->name = $input['name'];
+        $this->pizzaModel->selling_price = $input['selling_price'];
+        $this->pizzaModel->image_url = $input['image_url'];
 
-        $pizza = new Pizza($this->db);
-        $pizza->name = $sanitizedInput['name'];
-        $pizza->selling_price = $sanitizedInput['selling_price'];
-        $pizza->image_url = $sanitizedInput['image_url'];
-        $pizza->ingredients = $sanitizedInput['ingredients'];
-
-        $pizza->create();
-        $response['status_code_header'] = 'HTTP/1.1 201 Created';
-        $response['body'] = json_encode(['message' => 'Pizza created']);
-        return $response;
+        if ($this->pizzaModel->create()) {
+            http_response_code(201);
+            echo json_encode(["message" => "Pizza created"]);
+        } else {
+            http_response_code(500);
+            echo json_encode(["message" => "Failed to create pizza"]);
+        }
     }
 
     private function updatePizza() {
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (!$this->validatePizzaInput($input) || !isset($input['id'])) {
-            return $this->unprocessableEntityResponse();
+        $input = json_decode(file_get_contents("php://input"), true);
+
+        if (!isset($input['id']) || !$this->validatePizzaInput($input)) {
+            http_response_code(400);
+            echo json_encode(["message" => "Invalid input"]);
+            return;
         }
 
-        $sanitizedInput = $this->sanitizeInput($input);
+        $this->pizzaModel->id = (int)$input['id'];
+        $this->pizzaModel->name = $input['name'];
+        $this->pizzaModel->selling_price = $input['selling_price'];
+        $this->pizzaModel->image_url = $input['image_url'];
 
-        $pizza = new Pizza($this->db);
-        $pizza->id = (int)$input['id'];
-        $pizza->name = $sanitizedInput['name'];
-        $pizza->selling_price = $sanitizedInput['selling_price'];
-        $pizza->image_url = $sanitizedInput['image_url'];
-        $pizza->ingredients = $sanitizedInput['ingredients'];
-
-        $pizza->update();
-        $response['status_code_header'] = 'HTTP/1.1 200 OK';
-        $response['body'] = json_encode(['message' => 'Pizza updated']);
-        return $response;
+        if ($this->pizzaModel->update()) {
+            echo json_encode(["message" => "Pizza updated"]);
+        } else {
+            http_response_code(500);
+            echo json_encode(["message" => "Failed to update pizza"]);
+        }
     }
 
     private function deletePizza() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents("php://input"), true);
 
         if (!isset($input['id'])) {
-            return $this->unprocessableEntityResponse();
+            http_response_code(400);
+            echo json_encode(["message" => "Invalid input"]);
+            return;
         }
 
-        $pizza = new Pizza($this->db);
-        $pizza->delete($input['id']);
-        $response['status_code_header'] = 'HTTP/1.1 200 OK';
-        $response['body'] = json_encode(['message' => 'Pizza deleted']);
-        return $response;
+        if ($this->pizzaModel->delete((int)$input['id'])) {
+            echo json_encode(["message" => "Pizza deleted"]);
+        } else {
+            http_response_code(500);
+            echo json_encode(["message" => "Failed to delete pizza"]);
+        }
     }
 
     private function validatePizzaInput($input) {
-        if (
-            !isset($input['name']) ||
-            strlen($input['name']) < 2 ||
-            strlen($input['name']) > 50 ||
-            preg_match('/[\{\}\[\]"\!\.]/', $input['name']) ||
-            !isset($input['selling_price']) ||
-            !is_numeric($input['selling_price']) ||
-            !isset($input['ingredients']) ||
-            !is_array($input['ingredients']) ||
-            count($input['ingredients']) > 8 ||
-            count($input['ingredients']) < 1 ||
-            !array_reduce($input['ingredients'], fn($carry, $id) => $carry && is_numeric($id), true)
-        ) {
-            return false;
-        }
-        return true;
-    }
-
-    private function sanitizeInput($input) {
-        $sanitized = [];
-        $sanitized['name'] = htmlspecialchars(strip_tags($input['name'] ?? ''));
-        $sanitized['selling_price'] = filter_var($input['selling_price'] ?? '', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-        $sanitized['image_url'] = htmlspecialchars(strip_tags($input['image_url'] ?? ''));
-        $sanitized['ingredients'] = array_map('intval', $input['ingredients'] ?? []); // Ensure ingredients are integers
-        return $sanitized;
-    }
-
-    private function unprocessableEntityResponse() {
-        $response['status_code_header'] = 'HTTP/1.1 422 Unprocessable Entity';
-        $response['body'] = json_encode(['message' => 'Invalid input']);
-        return $response;
-    }
-
-    private function notFoundResponse() {
-        $response['status_code_header'] = 'HTTP/1.1 404 Not Found';
-        $response['body'] = json_encode(['message' => 'Not Found']);
-        return $response;
+        return isset($input['name']) && strlen($input['name']) >= 2 && strlen($input['name']) <= 50 &&
+            !preg_match('/[\{\}\[\]"\!\.]/', $input['name']) &&
+            isset($input['selling_price']) && is_numeric($input['selling_price']) &&
+            isset($input['image_url']);
     }
 }

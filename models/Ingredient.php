@@ -1,7 +1,7 @@
 <?php
 class Ingredient {
     private $connection;
-    private $table_name = "ingredients";
+    private $table = "ingredients";
     
     public $id;
     public $name;
@@ -11,6 +11,10 @@ class Ingredient {
 
     public function __construct($db) {
         $this->connection = $db;
+
+        if (!$this->connection) {
+            throw new Exception("Database connection is not set in Ingredient model.");
+        }
     }
 
     public function create() {
@@ -18,12 +22,14 @@ class Ingredient {
             INSERT INTO " . $this->table . " (name, cost_price, image_url, randomisation_percentage)
             VALUES (:name, :cost_price, :image_url, :randomisation_percentage);
         ";
+
         $stmt = $this->connection->prepare($query);
 
+        // Bind parameters
         $stmt->bindParam(':name', $this->name);
         $stmt->bindParam(':cost_price', $this->cost_price);
         $stmt->bindParam(':image_url', $this->image_url);
-        $stmt->bindParam(':randomisation_percentage', $this->randomisation_percentage);
+        $stmt->bindParam(':randomisation_percentage', $this->randomization_percentage);
 
         return $stmt->execute();
     }
@@ -34,13 +40,15 @@ class Ingredient {
             SET name = :name, cost_price = :cost_price, image_url = :image_url, randomisation_percentage = :randomisation_percentage
             WHERE id = :id;
         ";
+
         $stmt = $this->connection->prepare($query);
 
+        // Bind parameters
         $stmt->bindParam(':id', $this->id, PDO::PARAM_INT);
         $stmt->bindParam(':name', $this->name);
         $stmt->bindParam(':cost_price', $this->cost_price);
         $stmt->bindParam(':image_url', $this->image_url);
-        $stmt->bindParam(':randomisation_percentage', $this->randomisation_percentage);
+        $stmt->bindParam(':randomisation_percentage', $this->randomization_percentage);
 
         return $stmt->execute();
     }
@@ -50,6 +58,7 @@ class Ingredient {
             DELETE FROM " . $this->table . "
             WHERE id = :id;
         ";
+
         $stmt = $this->connection->prepare($query);
         $stmt->bindParam(':id', $id, PDO::PARAM_INT);
 
@@ -59,6 +68,11 @@ class Ingredient {
     public function findAll() {
         $query = "SELECT * FROM " . $this->table . ";";
         $stmt = $this->connection->query($query);
+
+        if (!$stmt) {
+            throw new Exception("Query failed: " . $this->connection->errorInfo()[2]);
+        }
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -67,6 +81,7 @@ class Ingredient {
             SELECT * FROM " . $this->table . "
             WHERE id = :id;
         ";
+
         $stmt = $this->connection->prepare($query);
         $stmt->bindParam(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
@@ -79,7 +94,13 @@ class Ingredient {
             SELECT * FROM " . $this->table . "
             WHERE randomisation_percentage > 0;
         ";
+
         $stmt = $this->connection->query($query);
+
+        if (!$stmt) {
+            throw new Exception("Query failed: " . $this->connection->errorInfo()[2]);
+        }
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
