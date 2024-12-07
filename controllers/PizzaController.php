@@ -64,11 +64,13 @@ class PizzaController {
             return $this->unprocessableEntityResponse();
         }
 
+        $sanitizedInput = $this->sanitizeInput($input);
+
         $pizza = new Pizza($this->db);
-        $pizza->name = $input['name'];
-        $pizza->selling_price = $input['selling_price'];
-        $pizza->image_url = $input['image_url'];
-        $pizza->ingredients = $input['ingredients'];
+        $pizza->name = $sanitizedInput['name'];
+        $pizza->selling_price = $sanitizedInput['selling_price'];
+        $pizza->image_url = $sanitizedInput['image_url'];
+        $pizza->ingredients = $sanitizedInput['ingredients'];
 
         $pizza->create();
         $response['status_code_header'] = 'HTTP/1.1 201 Created';
@@ -82,12 +84,14 @@ class PizzaController {
             return $this->unprocessableEntityResponse();
         }
 
+        $sanitizedInput = $this->sanitizeInput($input);
+
         $pizza = new Pizza($this->db);
-        $pizza->id = $input['id'];
-        $pizza->name = $input['name'];
-        $pizza->selling_price = $input['selling_price'];
-        $pizza->image_url = $input['image_url'];
-        $pizza->ingredients = $input['ingredients'];
+        $pizza->id = (int)$input['id'];
+        $pizza->name = $sanitizedInput['name'];
+        $pizza->selling_price = $sanitizedInput['selling_price'];
+        $pizza->image_url = $sanitizedInput['image_url'];
+        $pizza->ingredients = $sanitizedInput['ingredients'];
 
         $pizza->update();
         $response['status_code_header'] = 'HTTP/1.1 200 OK';
@@ -120,6 +124,15 @@ class PizzaController {
             return false;
         }
         return true;
+    }
+
+    private function sanitizeInput($input) {
+        $sanitized = [];
+        $sanitized['name'] = htmlspecialchars(strip_tags($input['name'] ?? ''));
+        $sanitized['selling_price'] = filter_var($input['selling_price'] ?? '', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+        $sanitized['image_url'] = htmlspecialchars(strip_tags($input['image_url'] ?? ''));
+        $sanitized['ingredients'] = array_map('intval', $input['ingredients'] ?? []); // Ensure ingredients are integers
+        return $sanitized;
     }
 
     private function unprocessableEntityResponse() {
