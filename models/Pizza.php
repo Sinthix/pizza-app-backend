@@ -7,6 +7,7 @@ class Pizza {
     public $name;
     public $selling_price;
     public $image_url;
+    public $ingredients;
 
     public function __construct($db) {
         $this->connection = $db;
