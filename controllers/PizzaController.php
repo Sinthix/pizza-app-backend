@@ -116,10 +116,16 @@ class PizzaController {
     private function validatePizzaInput($input) {
         if (
             !isset($input['name']) ||
+            strlen($input['name']) < 2 ||
+            strlen($input['name']) > 50 ||
+            preg_match('/[\{\}\[\]"\!\.]/', $input['name']) ||
             !isset($input['selling_price']) ||
             !is_numeric($input['selling_price']) ||
             !isset($input['ingredients']) ||
-            !is_array($input['ingredients'])
+            !is_array($input['ingredients']) ||
+            count($input['ingredients']) > 8 ||
+            count($input['ingredients']) < 1 ||
+            !array_reduce($input['ingredients'], fn($carry, $id) => $carry && is_numeric($id), true)
         ) {
             return false;
         }
