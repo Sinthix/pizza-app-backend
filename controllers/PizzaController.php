@@ -1,5 +1,6 @@
 <?php
-include_once '../models/Pizza.php';
+include_once __DIR__ . '/../models/Pizza.php';
+include_once __DIR__ . '/../config/database.php';
 
 class PizzaController {
     private $db;
