@@ -6,7 +6,7 @@ header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers
 
 require_once './config/database.php';
 require_once './controllers/PizzaController.php';
-//require_once './controllers/IngredientController.php';
+require_once './controllers/IngredientController.php';
 
 // Db connection
 $database = new Database();
@@ -16,7 +16,9 @@ $requestMethod = $_SERVER["REQUEST_METHOD"];
 $requestUri = $_SERVER["REQUEST_URI"];
 
 // Route requests based on URI
-if(strpos($requestUri, '/pizzas') !== false) {
+if(strpos($requestUri, '/ingredients') !== false) {
+    $controller = new IngredientController($db, $requestMethod);
+} elseif(strpos($requestUri, '/pizzas') !== false) {
     $controller = new PizzaController($db, $requestMethod);
 } else {
     header("HTTP/1.1 404 Not Found");
