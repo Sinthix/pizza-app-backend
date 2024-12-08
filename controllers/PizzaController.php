@@ -1,31 +1,36 @@
 <?php
-require_once __DIR__ . '/../models/Pizza.php';
-require_once __DIR__ . '/../config/database.php';
-
 class PizzaController {
     private $db;
     private $pizzaModel;
 
     public function __construct() {
+        include_once __DIR__ . '/../models/Pizza.php';
+        include_once __DIR__ . '/../config/database.php';
+
         $database = new Database();
         $this->db = $database->getConnection();
+
+        if ($this->db) {
+            echo "Database connection initialized successfully in IngredientController.\n";
+        } else {
+            echo "Failed to initialize database connection in IngredientController.\n";
+            exit; // Stop execution if database connection fails
+        }
+
         $this->pizzaModel = new Pizza($this->db);
     }
 
     public function processRequest() {
         $method = $_SERVER['REQUEST_METHOD'];
-        $action = $_GET['action'] ?? '';
+        $path = $_SERVER['REQUEST_URI'];
 
-        try {
+        if(strpos($path, '/pizzas') !== false) {
             switch ($method) {
                 case 'GET':
-                    if ($action === 'all') {
-                        $this->getAllPizzas();
-                    } elseif ($action === 'single' && isset($_GET['id'])) {
-                        $this->getPizzaById((int)$_GET['id']);
+                    if (isset($_GET['id'])) {
+                        $this->getPizzaById($_GET['id']);
                     } else {
-                        http_response_code(400);
-                        echo json_encode(["message" => "Invalid GET request"]);
+                        $this->getAllPizzas();
                     }
                     break;
                 case 'POST':
@@ -38,88 +43,96 @@ class PizzaController {
                     $this->deletePizza();
                     break;
                 default:
-                    http_response_code(405);
-                    echo json_encode(["message" => "Method not allowed"]);
+                    $this->sendResponse(405, ['error' => 'Method not allowed']);
             }
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(["message" => "Server error", "error" => $e->getMessage()]);
+        } else {
+            $this->sendResponse(404, ['error' => 'Endpoint not found']);
         }
     }
 
     private function getAllPizzas() {
         $pizzas = $this->pizzaModel->findAll();
-        echo json_encode($pizzas);
+        $this->sendResponse(200, $pizzas);
     }
 
     private function getPizzaById($id) {
-        $pizza = $this->pizzaModel->find($id);
-        if ($pizza) {
-            echo json_encode($pizza);
-        } else {
-            http_response_code(404);
-            echo json_encode(["message" => "Pizza not found"]);
+        try {
+            $pizza = $this->pizzaModel->find($id);
+            if ($pizza) {
+                $this->sendResponse(200, $pizza);
+            } else {
+                $this->sendResponse(404, ['error' => 'Ingredient not found']);
+            }
+        }catch (Exception $e) {
+            $this->sendResponse(500, ['error' => $e->getMessage()]);
         }
     }
 
     private function createPizza() {
         $input = json_decode(file_get_contents("php://input"), true);
 
-        if (!$this->validatePizzaInput($input)) {
-            http_response_code(400);
-            echo json_encode(["message" => "Invalid input"]);
-            return;
+        if ($this->validatePizzaInput($input)) {
+            $this->pizzaModel->name = $input['name'];
+            $this->pizzaModel->selling_price = $input['selling_price'];
+            $this->pizzaModel->image_url = $input['image_url'];
+
+            try {
+                if ($this->pizzaModel->create()) {
+                    $this->sendResponse(201, ['message' => 'Pizza created successfully']);
+                } else {
+                    $this->sendResponse(500, ['error' => 'Failed to create pizza']);
+                }
+            } catch (Exception $e) {
+                $this->sendResponse(500, ['error' => $e->getMessage()]);
+            }
+        }else {
+            $this->sendResponse(400, ['error' => 'Invalid input data']);
         }
 
-        $this->pizzaModel->name = $input['name'];
-        $this->pizzaModel->selling_price = $input['selling_price'];
-        $this->pizzaModel->image_url = $input['image_url'];
-
-        if ($this->pizzaModel->create()) {
-            http_response_code(201);
-            echo json_encode(["message" => "Pizza created"]);
-        } else {
-            http_response_code(500);
-            echo json_encode(["message" => "Failed to create pizza"]);
-        }
     }
 
     private function updatePizza() {
         $input = json_decode(file_get_contents("php://input"), true);
 
-        if (!isset($input['id']) || !$this->validatePizzaInput($input)) {
-            http_response_code(400);
-            echo json_encode(["message" => "Invalid input"]);
-            return;
-        }
+        if ($this->validatePizzaInput($input) && isset($input['id'])) {
+            $this->pizzaModel->id = (int)$input['id'];
+            $this->pizzaModel->name = $input['name'];
+            $this->pizzaModel->selling_price = $input['selling_price'];
+            $this->pizzaModel->image_url = $input['image_url'];
 
-        $this->pizzaModel->id = (int)$input['id'];
-        $this->pizzaModel->name = $input['name'];
-        $this->pizzaModel->selling_price = $input['selling_price'];
-        $this->pizzaModel->image_url = $input['image_url'];
-
-        if ($this->pizzaModel->update()) {
-            echo json_encode(["message" => "Pizza updated"]);
+            try {
+                if ($this->pizzaModel->update()) {
+                    $this->sendResponse(200, ['message' => 'Pizza updated successfully']);
+                } else {
+                    $this->sendResponse(500, ['error' => 'Failed to update pizza']);
+                }
+            } catch (Exception $e) {
+                $this->sendResponse(500, ['error' => $e->getMessage()]);
+            }
         } else {
-            http_response_code(500);
-            echo json_encode(["message" => "Failed to update pizza"]);
+            $this->sendResponse(400, ['error' => 'Invalid input data']);
         }
+
+        
+
+      
     }
 
     private function deletePizza() {
         $input = json_decode(file_get_contents("php://input"), true);
 
-        if (!isset($input['id'])) {
-            http_response_code(400);
-            echo json_encode(["message" => "Invalid input"]);
-            return;
-        }
-
-        if ($this->pizzaModel->delete((int)$input['id'])) {
-            echo json_encode(["message" => "Pizza deleted"]);
+        if (isset($input['id'])) {
+            try {
+                if ($this->pizzaModel->delete($input['id'])) {
+                    $this->sendResponse(200, ['message' => 'Pizza deleted successfully']);
+                } else {
+                    $this->sendResponse(500, ['error' => 'Failed to delete pizza']);
+                }
+            } catch (Exception $e) {
+                $this->sendResponse(500, ['error' => $e->getMessage()]);
+            }
         } else {
-            http_response_code(500);
-            echo json_encode(["message" => "Failed to delete pizza"]);
+            $this->sendResponse(400, ['error' => 'Invalid input data']);
         }
     }
 
@@ -128,5 +141,11 @@ class PizzaController {
             !preg_match('/[\{\}\[\]"\!\.]/', $input['name']) &&
             isset($input['selling_price']) && is_numeric($input['selling_price']) &&
             isset($input['image_url']);
+    }
+
+    private function sendResponse($statusCode, $data) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data);
     }
 }
