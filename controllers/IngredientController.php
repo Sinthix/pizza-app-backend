@@ -1,4 +1,5 @@
 <?php
+
 class IngredientController {
     private $db;
     private $ingredient;

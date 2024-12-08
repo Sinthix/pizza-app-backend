@@ -1,6 +1,5 @@
 <?php
 
-
 class PizzaController {
     private $db;
     private $pizzaModel;
