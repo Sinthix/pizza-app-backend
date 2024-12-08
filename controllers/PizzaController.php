@@ -1,4 +1,6 @@
 <?php
+
+
 class PizzaController {
     private $db;
     private $pizzaModel;
@@ -9,13 +11,6 @@ class PizzaController {
 
         $database = new Database();
         $this->db = $database->getConnection();
-
-        if ($this->db) {
-            echo "Database connection initialized successfully in IngredientController.\n";
-        } else {
-            echo "Failed to initialize database connection in IngredientController.\n";
-            exit; // Stop execution if database connection fails
-        }
 
         $this->pizzaModel = new Pizza($this->db);
     }

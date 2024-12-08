@@ -1,5 +1,5 @@
 <?php
-
+header('Access-Control-Allow-Origin: http://localhost:4200');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../controllers/PizzaController.php';
 require_once __DIR__ . '/../controllers/IngredientController.php';
